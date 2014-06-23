@@ -1,6 +1,5 @@
-package thousandyeardrift.com;
+package com.artefactual.mets.validator;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -10,14 +9,17 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMResult;
-import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamSource;
 
-import org.apache.commons.io.FileUtils;
+import org.jdom2.Document;
+import org.jdom2.Namespace;
+import org.jdom2.filter.ElementFilter;
+import org.jdom2.transform.JDOMResult;
+import org.jdom2.transform.JDOMSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.w3c.dom.Node;
+
+import com.artefactual.util.ClasspathResourceURIResolver;
 
 /**
  * This class validates XML documents against ISO Schematron files. It can be
@@ -29,12 +31,14 @@ import org.w3c.dom.Node;
  */
 public class Schematron {
 	private static final Logger log = LoggerFactory.getLogger(Schematron.class);
-	private static final String ISO_SVRL_PATH = "thousandyeardrift/com/mets/reader/iso_svrl.xsl";
+	public static final String SVRL_NS_URI = "http://purl.oclc.org/dsdl/svrl";
+	public static final Namespace SVRL_NS = Namespace.getNamespace("svrl", SVRL_NS_URI);
+	private static final String ISO_SVRL_PATH = "/iso_svrl.xsl";
 	private Templates schematronTemplates = null;
-	private String schematronFile = null;
+	private Source schematron = null;
 	
-	public Schematron(String schematronFile) {
-		this.schematronFile = schematronFile;
+	public Schematron(Source schematron) {
+		this.schematron = schematron;
 		loadSchematron();
 	}
 
@@ -45,10 +49,16 @@ public class Schematron {
 	 */
 	private void loadSchematron() {
 		// Load up a transformer and the ISO Schematron to XSL templates.
+		
+		//TransformerFactoryImpl factory = new TransformerFactoryImpl();
 		TransformerFactory factory = TransformerFactory.newInstance();
+		factory.setURIResolver(new ClasspathResourceURIResolver());
 		Templates isoSVRLTemplates = null;
 		try (InputStream svrlRes = Schematron.class
 				.getResourceAsStream(ISO_SVRL_PATH)) {
+			if(svrlRes == null) {
+				throw new Error(ISO_SVRL_PATH + " cannot obtain stream");
+			}
 			Source svrlrc = new StreamSource(svrlRes);
 			isoSVRLTemplates = factory.newTemplates(svrlrc);
 		} catch (IOException e) {
@@ -66,18 +76,8 @@ public class Schematron {
 					e);
 		}
 
-		Source schematron = null;
-		try {
-			if(schematronFile != null) {
-				schematron = new StreamSource(FileUtils.openInputStream(new File(schematronFile)));
-			} else {
-				schematron = new StreamSource(Schematron.class
-						.getResourceAsStream(ISO_SVRL_PATH));
-			}
-		} catch (IOException e) {
-			throw new Error("Cannot load schematron", e);
-		}
-		DOMResult res = new DOMResult();
+
+		JDOMResult res = new JDOMResult();
 		try {
 			t.transform(schematron, res);
 		} catch (TransformerException e) {
@@ -86,11 +86,10 @@ public class Schematron {
 					e);
 		}
 
-		// compile templates object for each profile
+		// compile templates for schematron
 		try {
-			schematronTemplates = factory.newTemplates(new DOMSource(res
-					.getNode()));
-			log.info("Schematron template compiled: {}", this.schematronFile);
+			schematronTemplates = factory.newTemplates(new JDOMSource(res.getDocument()));
+			log.debug("Schematron template compiled: {}", this.schematron);
 		} catch (TransformerConfigurationException e) {
 			throw new Error("There was a problem configuring the transformer.",
 					e);
@@ -106,7 +105,7 @@ public class Schematron {
 	 *            XML Source to validate
 	 * @return schematron output document
 	 */
-	public Node validate(Source source) {
+	public Document validate(Source source) {
 
 		// get a transformer
 		Transformer t = null;
@@ -118,14 +117,18 @@ public class Schematron {
 		}
 
 		// call the transform
-		DOMResult svrlRes = new DOMResult();
+		JDOMResult svrlRes = new JDOMResult();
 		try {
 			t.transform(source, svrlRes);
 		} catch (TransformerException e) {
 			throw new Error(
 					"There was a problem running Schematron validation XSL.", e);
 		}
-		return svrlRes.getNode();
+		return svrlRes.getDocument();
+	}
+	
+	public boolean hasFailedAsserts(Document n) {
+		return !n.getRootElement().getContent(new ElementFilter("failed-assert", SVRL_NS)).isEmpty();
 	}
 
 }

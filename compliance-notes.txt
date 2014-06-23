@@ -1,0 +1,15 @@
+Patterns observed in examples that seem out of compliance:
+- Some mdWraps contain <agent> XML data without the PREMIS namespace (noted as compliance exception 3401)
+
+ 
+Rules that do not seem to match docs: 
+digiprovMD 3) digiprovMD/mdWrap can contain *either* PREMIS:EVENT or PREMIS:AGENT (rules say only events)
+
+digiprovMD 8) digiprovMD MUST contain 3 mdWraps with attribute MDTYPE="PREMIS:AGENT"
+	This should be rephrased for clarity:
+	Each amdSec MUST contain 3 digiprovMD elements that contain mdWraps of MDTYPE PREMIS:AGENT
+	
+structMap 7) div element MAY have 1 DMDID attribute
+	Implemented as "If a div has a DMDID attribute, then it must refer to the ID of a dmdSec."
+	
+Also, I added validation of ISO dates for METS CREATED DATE, if that can be expected.
