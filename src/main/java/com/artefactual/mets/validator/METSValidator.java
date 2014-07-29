@@ -36,6 +36,11 @@ import com.artefactual.util.AppVersion;
 public class METSValidator {
 	private static final Logger LOG = LoggerFactory
 			.getLogger(METSValidator.class);
+	
+	// some POSIX/FreeBSD standard error codes
+	private static final int EXIT_USAGE = 64;
+	private static final int EXIT_NOINPUT = 66;
+	private static final int EXIT_CANTCREAT = 73;
 
 	private static final String ARCHIVEMATICA_SCHEMATRON = "/archivematica_mets_schematron.xml";
 
@@ -66,18 +71,18 @@ public class METSValidator {
 	public static void main(String[] args) {
 		CommandLineParser parser = new PosixParser();
 		CommandLine line = null;
+		String[] headfoot = getHeaderFooter();
 		try {
 			line = parser.parse(options, args);
 			if (line.getArgList().isEmpty()) {
 				HelpFormatter formatter = new HelpFormatter();
-				String[] headfoot = getHeaderFooter();
 				formatter.printHelp(CMD_LINE_SYNTAX, headfoot[0], options, headfoot[1]);
-				System.exit(1);
+				System.exit(EXIT_USAGE);
 			}
 		} catch (ParseException exp) {
 			HelpFormatter formatter = new HelpFormatter();
-			formatter.printHelp(CMD_LINE_SYNTAX, options);
-			System.exit(1);
+			formatter.printHelp(CMD_LINE_SYNTAX, headfoot[0], options, headfoot[1]);
+			System.exit(EXIT_USAGE);
 		}
 
 		// set up Schematron
@@ -94,7 +99,7 @@ public class METSValidator {
 			}
 		} catch (IOException e) {
 			LOG.error("Cannot load schematron", e);
-			System.exit(1);
+			System.exit(EXIT_NOINPUT);
 		}
 		Schematron schematron = new Schematron(schematronSource);
 
@@ -106,7 +111,7 @@ public class METSValidator {
 						.getOptionValue(outFile.getOpt())));
 			} catch (IOException e) {
 				LOG.error("Cannot open or create output file", e);
-				System.exit(2);
+				System.exit(EXIT_CANTCREAT);
 			}
 		} else {
 			outStream = System.out;
@@ -114,17 +119,21 @@ public class METSValidator {
 
 		@SuppressWarnings("unchecked")
 		List<String> files = (List<String>) line.getArgList();
+		int failedValidations = 0;
 		for (String fname : files) {
 			try (InputStream in = FileUtils.openInputStream(new File(fname))) {
 				Document results = schematron.validate(new StreamSource(in));
+				if(schematron.hasFailedAsserts(results)) {
+					failedValidations++;
+				}
 				XMLOutputter out = new XMLOutputter(Format.getPrettyFormat());
 				out.output(results, outStream);
 			} catch (IOException e) {
 				LOG.error("Cannot read input file", e);
-				System.exit(3);
+				System.exit(EXIT_NOINPUT);
 			}
-
 		}
+		System.exit(-1*failedValidations);
 	}
 
 	public static String[] getHeaderFooter() {
