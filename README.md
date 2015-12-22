@@ -30,3 +30,16 @@ The validator returns the following POSIX standard exit values:
 - cannot create output file: 73
 
 If validation completes normally then the exit value will reflect the number of files that failed to validate. So one failed validation will return -1. 6 invalid files will return -6, and so on. If all METS files are valid, then the exit value is 0.
+
+## Using Docker
+
+Build the image:
+
+    $ docker build -t mets-validator .
+
+We need to make the contents of the AIP available inside the container with Docker volumes.
+
+    $ export AIPDIR="/mnt/aip-store/aip-foobar"
+    $ docker run -it --rm --name mets-validator --volume "$AIPDIR:/aip" mets-validator /aip/data/METS.89588fdc-e76b-4f18-9d96-588ec54a0b73.xml
+
+`docker run` exits with the exit code of the validator.
